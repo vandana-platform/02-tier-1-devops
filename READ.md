@@ -1,4 +1,3 @@
-
 # Tier-1 DevOps Platform Systems
 
 This repository represents the **Tier-1 DevOps engineering layer** within a **multi-tier platform engineering architecture**.
@@ -13,9 +12,11 @@ These systems provide the **core infrastructure, delivery pipelines, platform se
 
 The following environments are implemented:
 
-- AWS
-- Azure
-- Cross-Cloud (provider-agnostic platform systems)
+| Provider | Description |
+|--------|-------------|
+| AWS | Cloud-specific platform implementations |
+| Azure | Cloud-specific platform implementations |
+| Cross-Cloud | Provider-agnostic platform systems |
 
 Each provider follows the **same platform architecture model** to maintain consistency across environments.
 
@@ -25,98 +26,73 @@ Each provider follows the **same platform architecture model** to maintain consi
 
 Each cloud provider contains the following platform systems:
 
-1. Application Platform  
-2. Networking Platform  
-3. Data Platform  
-4. DevOps Platform  
-5. Observability Platform  
-6. Security Platform  
+| System ID | Platform System |
+|-----------|----------------|
+| system-01 | Application Platform |
+| system-02 | Networking Platform |
+| system-03 | Data Platform |
+| system-04 | DevOps Platform |
+| system-05 | Observability Platform |
+| system-06 | Security Platform |
 
 These systems represent the **major engineering platform domains** required to build and operate cloud-native infrastructure.
-
-Example structure:
-
-aws/
-├── system-01-application-platform
-├── system-02-networking-platform
-├── system-03-data-platform
-├── system-04-devops-platform
-├── system-05-observability-platform
-└── system-06-security-platform
 
 ---
 
 # Capability Layers
 
-Each platform system is organized into **capability layers** that separate platform responsibilities.
+Each platform system is organized into **capability layers** that separate platform responsibilities and maintain clear engineering boundaries across platform domains.
 
-01-architecture  
-02-infrastructure  
-03-services  
-04-ci-cd  
-05-observability  
-06-security  
+These layers ensure that **architecture, infrastructure, services, delivery pipelines, observability, and security capabilities** are implemented in a consistent and structured way across all cloud environments.
 
-Description of each layer:
-
-| Layer | Purpose |
-|------|--------|
-| 01-architecture | Architecture design and system documentation |
-| 02-infrastructure | Infrastructure provisioning and cloud resources |
-| 03-services | Platform services and workloads |
-| 04-ci-cd | CI/CD pipelines and deployment automation |
-| 05-observability | Monitoring, logging, metrics, tracing |
-| 06-security | Security policies, controls, and compliance |
+| Layer | Description |
+|------|-------------|
+| **01-architecture** | Architecture design, platform documentation, and system design decisions |
+| **02-infrastructure** | Infrastructure provisioning including networking, compute, storage, and core cloud resources |
+| **03-services** | Platform services and workloads deployed on top of infrastructure |
+| **04-ci-cd** | CI/CD pipelines, build systems, deployment automation, and release workflows |
+| **05-observability** | Monitoring, logging, metrics, tracing, and alerting systems |
+| **06-security** | Security policies, controls, identity management, and compliance mechanisms |
 
 ---
 
 # Deployment Maturity Stages
 
-Implementation layers evolve through **three maturity stages**.
-
-stage-01-foundation  
-stage-02-production  
-stage-03-scalability  
+Implementation layers evolve through **three maturity stages** as platform systems grow from foundational infrastructure to enterprise-scale deployments.
 
 | Stage | Description |
 |------|-------------|
-| stage-01-foundation | Initial infrastructure setup and baseline platform capabilities |
-| stage-02-production | Production-ready deployments with operational reliability |
-| stage-03-scalability | Advanced scalability, automation, and enterprise patterns |
+| **stage-01-foundation** | Initial infrastructure setup and baseline platform capabilities |
+| **stage-02-production** | Production-ready deployments with operational reliability |
+| **stage-03-scalability** | Advanced scalability, automation, and enterprise platform patterns |
 
-Example structure:
+Each stage introduces **additional capabilities as the platform evolves and matures**.
+
+Example path:
 
 aws/system-02-networking-platform/02-infrastructure/
-
-├── stage-01-foundation  
-├── stage-02-production  
-└── stage-03-scalability  
-
-Each stage introduces **additional capabilities as the platform evolves**.
 
 ---
 
 # Repository Structure
 
-02-tier-1-devops
+| Area | Description |
+|------|-------------|
+| aws | AWS platform system implementations |
+| azure | Azure platform system implementations |
+| cross-cloud | Provider-agnostic platform implementations |
+| scripts | Repository bootstrap and automation scripts |
 
-├── aws
-│   ├── system-01-application-platform
-│   ├── system-02-networking-platform
-│   ├── system-03-data-platform
-│   ├── system-04-devops-platform
-│   ├── system-05-observability-platform
-│   └── system-06-security-platform
-│
-├── azure
-│   └── same platform system structure as AWS
-│
-├── cross-cloud
-│   └── provider-agnostic platform implementations
-│
-└── scripts
-    ├── bootstrap_platform_structure.py
-    └── README.md
+### AWS Platform Systems
+
+| Folder | Purpose |
+|------|---------|
+| system-01-application-platform | Application platform capabilities |
+| system-02-networking-platform | Networking infrastructure and services |
+| system-03-data-platform | Data platform services and storage systems |
+| system-04-devops-platform | CI/CD systems and DevOps automation |
+| system-05-observability-platform | Monitoring, logging, and metrics systems |
+| system-06-security-platform | Security policies, identity systems, and compliance |
 
 ---
 
@@ -124,9 +100,11 @@ Each stage introduces **additional capabilities as the platform evolves**.
 
 Automation scripts are included to **bootstrap the repository structure** for platform engineering systems.
 
-scripts/bootstrap_platform_structure.py
+| Script | Purpose |
+|------|---------|
+| bootstrap_platform_structure.py | Generates the standardized multi-cloud platform repository structure |
 
-This script generates the **standardized multi-cloud platform layout** used throughout the repository.
+This script creates the **platform system folders, capability layers, and maturity stage directories** used throughout the repository.
 
 ---
 
@@ -134,10 +112,9 @@ This script generates the **standardized multi-cloud platform layout** used thro
 
 This repository is part of a **multi-tier platform engineering model**.
 
-01-platform-core  
-Reusable platform modules, shared architecture, and platform standards
+| Repository | Purpose |
+|------------|--------|
+| 01-platform-core | Reusable platform modules, shared architecture, and platform standards |
+| 02-tier-1-devops | Cloud platform implementations and foundational DevOps systems |
 
-02-tier-1-devops  
-Cloud platform implementations and foundational DevOps systems
-
-Future tiers will extend this architecture with **more advanced platform engineering capabilities**.
+Future tiers will extend this architecture with **advanced platform engineering capabilities and higher-level automation systems**.
