@@ -1,3 +1,4 @@
+
 # Tier-1 DevOps Platform Systems
 
 This repository represents the **Tier-1 DevOps engineering layer** within a **multi-tier platform engineering architecture**.
@@ -8,7 +9,7 @@ These systems provide the **core infrastructure, delivery pipelines, platform se
 
 ---
 
-# Cloud Providers
+## Cloud Providers
 
 The following environments are implemented:
 
@@ -22,7 +23,7 @@ Each provider follows the **same platform architecture model** to maintain consi
 
 ---
 
-# Platform Systems
+## Platform Systems
 
 Each cloud provider contains the following platform systems:
 
@@ -39,11 +40,11 @@ These systems represent the **major engineering platform domains** required to b
 
 ---
 
-# Capability Layers
+## Capability Layers
 
 Each platform system is organized into **capability layers** that separate platform responsibilities and maintain clear engineering boundaries across platform domains.
 
-These layers ensure that **architecture, infrastructure, services, delivery pipelines, observability, and security capabilities** are implemented in a consistent and structured way across all cloud environments.
+These layers ensure that **architecture, infrastructure, services, delivery pipelines, observability, and security capabilities** are implemented in a a consistent and structured way across all cloud environments.
 
 | Layer | Description |
 |------|-------------|
@@ -56,7 +57,7 @@ These layers ensure that **architecture, infrastructure, services, delivery pipe
 
 ---
 
-# Deployment Maturity Stages
+## Deployment Maturity Stages
 
 Implementation layers evolve through **three maturity stages** as platform systems grow from foundational infrastructure to enterprise-scale deployments.
 
@@ -70,11 +71,11 @@ Each stage introduces **additional capabilities as the platform evolves and matu
 
 Example path:
 
-aws/system-02-networking-platform/02-infrastructure/
+`aws/system-02-networking-platform/02-infrastructure/`
 
 ---
 
-# Repository Structure
+## Repository Structure
 
 | Area | Description |
 |------|-------------|
@@ -96,7 +97,7 @@ aws/system-02-networking-platform/02-infrastructure/
 
 ---
 
-# Automation
+## Automation
 
 Automation scripts are included to **bootstrap the repository structure** for platform engineering systems.
 
@@ -108,7 +109,7 @@ This script creates the **platform system folders, capability layers, and maturi
 
 ---
 
-# Platform Engineering Architecture
+## Platform Engineering Architecture
 
 This repository is part of a **multi-tier platform engineering model**.
 
