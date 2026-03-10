@@ -1,0 +1,15 @@
+# This Dockerfile builds the container image for the platform sample workload.
+# The image packages the FastAPI application and defines the runtime configuration
+# used by ECS tasks within the application platform service layer.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY ../app/fastapi-realworld-backend /app
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+EXPOSE 8000
+
+CMD ["uvicorn", "conduit.app:app", "--host", "0.0.0.0", "--port", "8000"]
