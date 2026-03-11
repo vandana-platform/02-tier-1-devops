@@ -1,137 +1,121 @@
 # EC2 Terraform Instance
 
-This project provisions a basic Amazon EC2 instance using Terraform as part of the **Application Platform infrastructure foundation**.
+Provisions a basic Amazon EC2 instance using Terraform as part of the **Application Platform infrastructure foundation**.
 
 The purpose of this project is to demonstrate how compute infrastructure can be provisioned and managed using **Infrastructure as Code (IaC)**.
 
-Terraform is used to define, create, and manage the EC2 instance and its associated security group.
+---
 
---------------------------------------------------
+## Platform Context
 
-Platform Context
-
-Repository Layer  
-Tier-1 DevOps Platform Systems
-
-Cloud Provider  
-AWS
-
-Platform System  
-system-01 — Application Platform
-
-Capability Layer  
-02-infrastructure
-
-Infrastructure Stage  
-stage-01-foundation
+| Field | Value |
+|---|---|
+| Repository Layer | Tier-1 DevOps Platform Systems |
+| Cloud Provider | AWS |
+| Platform System | system-01 — Application Platform |
+| Capability Layer | 02-infrastructure |
+| Infrastructure Stage | stage-01-foundation |
 
 This project represents a **foundation-level compute capability** for the Application Platform.
 
---------------------------------------------------
+---
 
-Capability Implemented
+## Resources Created
 
-Provision a basic compute instance using Terraform.
+| Resource | Description |
+|---|---|
+| `aws_instance` | Amazon EC2 instance (`t3.micro`, `us-east-1`) |
+| `aws_security_group` | Security group allowing inbound SSH (port 22) and all outbound traffic |
 
-Resources created:
+---
 
-• Amazon EC2 Instance  
-• AWS Security Group allowing SSH access
+## Prerequisites
 
-The security group is attached to the EC2 instance to allow secure administrative access.
+- [Terraform](https://developer.hashicorp.com/terraform/install) `>= 1.5.0`
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) configured with valid credentials
+- AWS provider `~> 5.0`
 
---------------------------------------------------
+---
 
-Project Structure
+## Project Structure
 
+```
 ec2-terraform-instance/
+├── versions.tf   # Terraform and provider version constraints
+├── provider.tf   # AWS provider configuration
+├── variables.tf  # Input variable definitions
+├── main.tf       # EC2 instance and security group resources
+├── outputs.tf    # Output values (instance ID, public IP)
+└── README.md
+```
 
-versions.tf  
-Defines required Terraform version and provider constraints.
+---
 
-provider.tf  
-Configures the AWS provider used for infrastructure provisioning.
+## Input Variables
 
-variables.tf  
-Defines input variables such as the instance type.
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `aws_region` | `string` | `us-east-1` | AWS region for resource deployment |
+| `instance_type` | `string` | `t3.micro` | EC2 instance type |
 
-main.tf  
-Defines the infrastructure resources including the EC2 instance and security group.
+---
 
-outputs.tf  
-Defines Terraform outputs including instance ID and public IP.
+## Terraform Workflow
 
-README.md  
-Project documentation.
-
---------------------------------------------------
-
-Terraform Workflow
-
-Initialize Terraform
-
+**Initialize**
+```bash
 terraform init
+```
 
-Review the execution plan
-
+**Review the execution plan**
+```bash
 terraform plan
+```
 
-Create the infrastructure
-
+**Deploy infrastructure**
+```bash
 terraform apply
+```
 
-Destroy the infrastructure
-
+**Destroy infrastructure**
+```bash
 terraform destroy
+```
 
-Destroying infrastructure ensures the environment can be recreated cleanly and prevents unused cloud resources from consuming credits.
+> Destroying infrastructure ensures the environment can be recreated cleanly and prevents unused cloud resources from incurring costs.
 
---------------------------------------------------
+---
 
-Outputs
+## Outputs
 
-After successful deployment Terraform returns outputs including:
+After a successful `terraform apply`, the following values are returned:
 
-instance_id  
-public_ip
+| Output | Description |
+|---|---|
+| `instance_id` | The ID of the provisioned EC2 instance |
+| `public_ip` | The public IP address of the instance |
 
-Example output:
+Example:
+```
+instance_id = "i-07e76ca4a6776b7c7"
+public_ip   = "44.210.102.31"
+```
 
-instance_id = i-07e76ca4a6776b7c7  
-public_ip   = 44.210.102.31
+---
 
-These outputs allow engineers to quickly identify and access the deployed instance.
+## Troubleshooting
 
---------------------------------------------------
+**`InvalidParameterCombination` — instance type not eligible for Free Tier**
 
-Error Encountered During Deployment
+The selected EC2 instance type was not Free Tier eligible. Resolved by updating the instance type to `t3.micro` in `variables.tf`.
 
-During the initial deployment Terraform returned the following error:
+---
 
-InvalidParameterCombination  
-The specified instance type is not eligible for Free Tier.
+## Learning Outcomes
 
-Cause
-
-The selected EC2 instance type was not eligible for AWS Free Tier.
-
-Resolution
-
-The instance type was updated to a Free Tier eligible instance type:
-
-t3.micro
-
-After updating the instance type, Terraform successfully created the EC2 instance.
-
---------------------------------------------------
-
-Learning Outcomes
-
-This project demonstrates the following DevOps capabilities:
-
-• Infrastructure provisioning using Terraform  
-• AWS EC2 instance deployment  
-• Security group configuration  
-• Terraform lifecycle management (init → plan → apply → destroy)  
-• Troubleshooting cloud provisioning errors  
-• Verifying infrastructure using AWS CLI and AWS Console
+- Infrastructure provisioning with Terraform
+- AWS EC2 instance deployment
+- Security group configuration
+- Terraform lifecycle management (`init` → `plan` → `apply` → `destroy`)
+- Troubleshooting cloud provisioning errors
+- Verifying infrastructure via AWS CLI and AWS Console
