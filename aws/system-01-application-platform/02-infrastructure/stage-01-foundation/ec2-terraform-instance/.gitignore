@@ -1,0 +1,40 @@
+# -----------------------------------------------------------------------------
+# Terraform .gitignore
+#
+# This file prevents Terraform local state, cache files, plan outputs,
+# and environment-specific configuration files from being committed to Git.
+#
+# These files are generated locally during Terraform operations and may
+# contain sensitive infrastructure information such as resource IDs,
+# IP addresses, and credentials. They should remain on the local machine
+# and not be stored in version control.
+#
+# Reference: https://developer.hashicorp.com/terraform/language/settings/backends/configuration
+# -----------------------------------------------------------------------------
+
+# Terraform provider cache
+.terraform/
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform variable files
+*.tfvars
+*.tfvars.json
+
+# Crash logs
+crash.log
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform plan files
+*.tfplan
+
+# Terraform CLI config
+.terraformrc
+terraform.rc
