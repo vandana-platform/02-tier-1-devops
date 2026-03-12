@@ -16,6 +16,8 @@ DevOps-level interview questions covering the concepts demonstrated in this proj
 
 `terraform plan` performs a dry run — it reads current state and queries the AWS API to compute what changes would be made, but makes no modifications. `terraform apply` executes those changes. Running `plan -out=tfplan` followed by `apply tfplan` guarantees that exactly what was reviewed gets applied, which is critical in CI/CD pipelines.
 
+**Terraform Workflow**
+
 ```mermaid
 flowchart LR
     A[terraform init] --> B[terraform plan]
@@ -44,6 +46,8 @@ It records the exact provider versions and SHA-256 checksums selected by `terraf
 **Q5. What is Terraform state and why is it important?**
 
 Terraform state (`terraform.tfstate`) maps your configuration resources to real-world infrastructure. Terraform uses it to determine what exists, what needs to change, and what should be destroyed. Without state, Terraform cannot track drift or perform incremental updates — it would attempt to recreate all resources on every apply.
+
+**Terraform State and Drift Detection**
 
 ```mermaid
 flowchart TD
@@ -89,6 +93,8 @@ AWS provider v4 deprecated inline sub-resource blocks (e.g., `versioning {}`, `s
 
 Through implicit dependencies. `aws_s3_bucket_versioning`, `aws_s3_bucket_server_side_encryption_configuration`, and `aws_s3_bucket_public_access_block` all reference `aws_s3_bucket.platform_baseline_bucket.id`. Terraform builds a dependency graph and ensures the base bucket is created first before applying the sub-configurations.
 
+**S3 Bucket Resource Dependency Graph**
+
 ```mermaid
 graph TD
     BUCKET[aws_s3_bucket\nplatform_baseline_bucket]
@@ -116,6 +122,8 @@ S3 bucket names must be globally unique across all AWS accounts and regions, 3�
 **Q13. What does enabling S3 versioning mean for object storage behaviour?**
 
 Once enabled, every `PUT` operation creates a new version of the object rather than overwriting it. A `DELETE` operation inserts a delete marker instead of permanently removing the object. All previous versions remain accessible by specifying the `VersionId`. Versioning cannot be fully disabled once enabled — it can only be suspended, which stops creating new versions but retains existing ones.
+
+**S3 Versioning Behavior**
 
 ```mermaid
 flowchart TD
@@ -178,6 +186,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "retention" {
 
 Common rules include transitioning non-current versions to `STANDARD_IA` or `GLACIER` to reduce cost, expiring non-current versions after a defined retention period, and aborting incomplete multipart uploads to prevent orphaned partial uploads from accumulating.
 
+**S3 Lifecycle Policy Processing**
+
 ```mermaid
 flowchart LR
     NEW[Object uploaded\ncurrent version] -->|Newer PUT replaces it| NC[Non-current version]
@@ -198,6 +208,8 @@ flowchart LR
 | SSE-S3 (AES-256) | AWS manages keys entirely | General baseline; no compliance key requirements |
 | SSE-KMS | AWS KMS manages CMKs; customer controls key policy | Audit trails, cross-account access, HIPAA/PCI |
 | SSE-C | Customer provides key per request | Customer retains full key ownership; no AWS key storage |
+
+**S3 Server-Side Encryption Evaluation**
 
 ```mermaid
 flowchart TD
@@ -266,6 +278,8 @@ In Terraform this is managed with `aws_s3_bucket_policy` using a `data "aws_iam_
 | `block_public_policy` | Prevents bucket policies that grant public access |
 | `restrict_public_buckets` | Blocks public and cross-account access to the bucket when a public policy is in effect |
 
+**S3 Public Access Block Evaluation**
+
 ```mermaid
 flowchart TD
     REQ[Incoming S3 request] --> WILD{Principal is wildcard\nPrincipal: * ?}
@@ -329,6 +343,16 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
 }
+```
+
+**S3 VPC Endpoint Architecture**
+
+```mermaid
+flowchart LR
+    EC2[EC2 Instance\nprivate subnet] -->|S3 API request| EP[VPC Gateway Endpoint\ncom.amazonaws.region.s3]
+    EP -->|AWS private network\nno internet traversal| S3[S3 Bucket]
+    EP -.->|Route table entry\nautomatically added| RT[Private Route Table]
+    POLICY[Endpoint Policy\noptional: restrict to specific buckets] -.-> EP
 ```
 
 ---
@@ -425,6 +449,20 @@ resource "aws_s3_bucket_replication_configuration" "crr" {
 
 CRR is used for disaster recovery (hot standby in a secondary region), compliance (data residency with auditable backup in a second region), and latency optimisation for geographically distributed reads. Note that CRR only replicates new objects written after replication is enabled; existing objects must be copied separately using S3 Batch Operations.
 
+**S3 Cross-Region Replication Architecture**
+
+```mermaid
+flowchart LR
+    SRC[Source S3 Bucket\nRegion A\nversioning enabled]
+    ROLE[IAM Replication Role\ns3:ReplicateObject\ns3:ReplicateDelete]
+    RULE[Replication Rule\nfilter: all objects\nstorage class: STANDARD_IA]
+    DST[Destination S3 Bucket\nRegion B\nversioning enabled]
+
+    SRC -->|new object written| RULE
+    RULE -->|assumes| ROLE
+    ROLE -->|replicates over\nAWS backbone| DST
+```
+
 ---
 
 ## DevOps and Platform Engineering Considerations
@@ -441,6 +479,8 @@ A typical pipeline for infrastructure changes:
 6. **Post-apply**: `terraform output -json` captures bucket names and ARNs for downstream pipeline stages (e.g., passing the bucket name to application deployment steps).
 
 State is stored in S3 with DynamoDB locking. The pipeline IAM role is scoped to the specific resources it provisions.
+
+**Terraform Infrastructure CI/CD Pipeline**
 
 ```mermaid
 flowchart TD

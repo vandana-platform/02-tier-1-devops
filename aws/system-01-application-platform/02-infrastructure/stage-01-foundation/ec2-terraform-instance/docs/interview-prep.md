@@ -16,6 +16,8 @@ DevOps-level interview questions covering the concepts demonstrated in this proj
 
 `terraform plan` performs a dry run — it reads current state and queries the AWS API to compute what changes would be made, but makes no modifications. `terraform apply` executes those changes. Running `plan -out=tfplan` followed by `apply tfplan` guarantees that exactly what was reviewed gets applied, which is critical in CI/CD pipelines.
 
+**Terraform Workflow**
+
 ```mermaid
 flowchart LR
     A[terraform init] --> B[terraform plan]
@@ -44,6 +46,8 @@ It records the exact provider versions and SHA-256 checksums selected by `terraf
 **Q5. What is Terraform state and why is it important?**
 
 Terraform state (`terraform.tfstate`) maps your configuration resources to real-world infrastructure. Terraform uses it to determine what exists, what needs to change, and what should be destroyed. Without state, Terraform cannot track drift or perform incremental updates — it would attempt to recreate all resources on every apply.
+
+**Terraform State and Drift Detection**
 
 ```mermaid
 flowchart TD
@@ -173,6 +177,8 @@ Replace `cidr_blocks = ["0.0.0.0/0"]` in the ingress block with `cidr_blocks = [
 
 Security groups are **stateful**: if an inbound connection is permitted, the response traffic is automatically allowed regardless of egress rules. This is handled by the underlying connection-tracking layer. As a result, most configurations allow all egress (`0.0.0.0/0`) and focus rule definitions on ingress restrictions.
 
+**Security Group Stateful Traffic Flow**
+
 ```mermaid
 flowchart LR
     CLIENT[Client] -->|Inbound request\nPort 80 — ingress rule allows| SG[Security Group]
@@ -191,6 +197,8 @@ A **public subnet** has a route to an Internet Gateway, giving instances a publi
 - Bastion hosts or NAT Gateways reside in **public subnets**.
 
 This follows the AWS defence-in-depth model — the attack surface of the application tier is not directly internet-reachable.
+
+**Public vs Private Subnet Architecture**
 
 ```mermaid
 graph TD
@@ -221,6 +229,8 @@ Terraform builds a directed acyclic graph (DAG) of all resources based on their 
 - **Explicit**: the `depends_on` meta-argument forces ordering when no attribute reference exists.
 
 In this project, the EC2 instance implicitly depends on the security group via the `aws_security_group.web_sg.id` reference.
+
+**Terraform Dependency Graph**
 
 ```mermaid
 graph LR
@@ -354,6 +364,8 @@ A typical pipeline for infrastructure changes:
 5. **Post-apply**: `terraform output -json` captured and published to downstream pipeline stages
 
 State is stored in S3 with DynamoDB locking. The pipeline IAM role is scoped to the specific resources it provisions.
+
+**Terraform Infrastructure CI/CD Pipeline**
 
 ```mermaid
 flowchart TD
