@@ -2,7 +2,7 @@
 
 ## Overview
 
-This module provisions a secure, versioned S3 bucket as part of the foundational infrastructure layer for the Tier-1 AWS Application Platform. It sits at **stage-01-foundation**, establishing a compliant storage baseline that subsequent platform stages can build upon.
+This project provisions a secure, versioned S3 bucket using Terraform. It serves as the **foundation-level storage capability** for the Application Platform (`system-01`, `stage-01-foundation`), establishing a compliant baseline that subsequent platform stages can build upon.
 
 ---
 
@@ -36,7 +36,7 @@ AWS Account (us-east-1)
 |------|---------|
 | `versions.tf` | Pins Terraform CLI (`>= 1.5.0`) and AWS provider (`~> 5.0`) versions to ensure reproducible runs |
 | `provider.tf` | Configures the AWS provider; region is driven by the `aws_region` variable (default `us-east-1`) |
-| `variables.tf` | Declares all input variables; currently exposes `aws_region` to allow region overrides without code changes |
+| `variables.tf` | Declares all input variables; exposes `aws_region` to allow region overrides without modifying core infrastructure code |
 | `main.tf` | Declares the four AWS resources that constitute the S3 baseline (see below) |
 | `outputs.tf` | Exports `s3_bucket_name` so downstream modules or CI pipelines can reference the bucket without hard-coding its name |
 
@@ -69,7 +69,7 @@ Attached to the bucket via `bucket = aws_s3_bucket.platform_baseline_bucket.id`.
 
 ### `aws_s3_bucket_server_side_encryption_configuration`
 
-Configures a default encryption rule using the `aws:kms` or `AES256` algorithm. All objects uploaded without an explicit encryption header inherit this rule automatically. No client-side changes are required.
+Configures a default encryption rule using AES-256 (SSE-S3). All objects uploaded without an explicit encryption header inherit this rule automatically. No client-side changes are required.
 
 ### `aws_s3_bucket_public_access_block`
 
@@ -110,7 +110,7 @@ AWS Provider (hashicorp/aws ~> 5.0)
 
 ## Tagging Strategy
 
-All resources share consistent tags applied to `aws_s3_bucket`:
+All resources share a consistent tag set applied at the resource level in `main.tf`:
 
 | Tag | Value |
 |-----|-------|
