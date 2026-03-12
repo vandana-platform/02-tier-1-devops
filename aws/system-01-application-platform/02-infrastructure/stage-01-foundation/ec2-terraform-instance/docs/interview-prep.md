@@ -16,6 +16,17 @@ DevOps-level interview questions covering the concepts demonstrated in this proj
 
 `terraform plan` performs a dry run — it reads current state and queries the AWS API to compute what changes would be made, but makes no modifications. `terraform apply` executes those changes. Running `plan -out=tfplan` followed by `apply tfplan` guarantees that exactly what was reviewed gets applied, which is critical in CI/CD pipelines.
 
+```mermaid
+flowchart LR
+    A[terraform init] --> B[terraform plan]
+    B --> C{Review diff}
+    C -->|Approve| D[terraform apply]
+    C -->|Revise| E[Update config]
+    E --> B
+    D --> F[Infrastructure live]
+    F --> G[terraform destroy]
+```
+
 ---
 
 **Q3. What does `~> 5.0` mean in the AWS provider version constraint?**
@@ -33,6 +44,18 @@ It records the exact provider versions and SHA-256 checksums selected by `terraf
 **Q5. What is Terraform state and why is it important?**
 
 Terraform state (`terraform.tfstate`) maps your configuration resources to real-world infrastructure. Terraform uses it to determine what exists, what needs to change, and what should be destroyed. Without state, Terraform cannot track drift or perform incremental updates — it would attempt to recreate all resources on every apply.
+
+```mermaid
+flowchart TD
+    CFG[HCL Configuration] --> PLAN[terraform plan]
+    STATE[terraform.tfstate\ncurrent state] --> PLAN
+    AWS[AWS API\nlive state] --> PLAN
+    PLAN --> DIFF{Drift detected?}
+    DIFF -->|Yes| APPLY[terraform apply]
+    DIFF -->|No| NOOP[No changes needed]
+    APPLY --> STATE
+    APPLY --> AWS
+```
 
 ---
 
@@ -150,6 +173,14 @@ Replace `cidr_blocks = ["0.0.0.0/0"]` in the ingress block with `cidr_blocks = [
 
 Security groups are **stateful**: if an inbound connection is permitted, the response traffic is automatically allowed regardless of egress rules. This is handled by the underlying connection-tracking layer. As a result, most configurations allow all egress (`0.0.0.0/0`) and focus rule definitions on ingress restrictions.
 
+```mermaid
+flowchart LR
+    CLIENT[Client] -->|Inbound request\nPort 80 — ingress rule allows| SG[Security Group]
+    SG --> EC2[EC2 Instance]
+    EC2 -->|Response traffic| SG
+    SG -->|Automatically allowed\nstateful — no egress rule needed| CLIENT
+```
+
 ---
 
 **Q19. What is the difference between a public and private subnet, and which is more appropriate for a production EC2 instance?**
@@ -160,6 +191,17 @@ A **public subnet** has a route to an Internet Gateway, giving instances a publi
 - Bastion hosts or NAT Gateways reside in **public subnets**.
 
 This follows the AWS defence-in-depth model — the attack surface of the application tier is not directly internet-reachable.
+
+```mermaid
+graph TD
+    Internet --> IGW[Internet Gateway]
+    IGW --> PubSub[Public Subnet\nLoad Balancer / Bastion / NAT Gateway]
+    PubSub --> LB[Load Balancer]
+    PubSub --> NAT[NAT Gateway]
+    LB --> PrivSub[Private Subnet\nApplication EC2 instances]
+    PrivSub -->|Outbound only| NAT
+    NAT --> IGW
+```
 
 ---
 
@@ -179,6 +221,13 @@ Terraform builds a directed acyclic graph (DAG) of all resources based on their 
 - **Explicit**: the `depends_on` meta-argument forces ordering when no attribute reference exists.
 
 In this project, the EC2 instance implicitly depends on the security group via the `aws_security_group.web_sg.id` reference.
+
+```mermaid
+graph LR
+    PROV[provider: aws] --> SG[aws_security_group\nweb_sg]
+    PROV --> EC2[aws_instance\nweb]
+    SG -->|implicit dependency\nvpc_security_group_ids ref| EC2
+```
 
 ---
 
@@ -305,6 +354,17 @@ A typical pipeline for infrastructure changes:
 5. **Post-apply**: `terraform output -json` captured and published to downstream pipeline stages
 
 State is stored in S3 with DynamoDB locking. The pipeline IAM role is scoped to the specific resources it provisions.
+
+```mermaid
+flowchart TD
+    PR[Pull Request] --> FMT[terraform fmt -check]
+    FMT --> VAL[terraform validate]
+    VAL --> PLAN[terraform plan -out=tfplan\nartefact saved]
+    PLAN --> GATE[Approval gate\nhuman review or Sentinel/OPA]
+    GATE -->|Approved| APPLY[terraform apply tfplan]
+    GATE -->|Rejected| FAIL[Pipeline blocked]
+    APPLY --> OUT[terraform output -json\npublished to downstream stages]
+```
 
 ---
 

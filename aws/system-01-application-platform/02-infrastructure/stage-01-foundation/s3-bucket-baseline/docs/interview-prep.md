@@ -16,6 +16,17 @@ DevOps-level interview questions covering the concepts demonstrated in this proj
 
 `terraform plan` performs a dry run — it reads current state and queries the AWS API to compute what changes would be made, but makes no modifications. `terraform apply` executes those changes. Running `plan -out=tfplan` followed by `apply tfplan` guarantees that exactly what was reviewed gets applied, which is critical in CI/CD pipelines.
 
+```mermaid
+flowchart LR
+    A[terraform init] --> B[terraform plan]
+    B --> C{Review diff}
+    C -->|Approve| D[terraform apply]
+    C -->|Revise| E[Update config]
+    E --> B
+    D --> F[Infrastructure live]
+    F --> G[terraform destroy]
+```
+
 ---
 
 **Q3. What does `~> 5.0` mean in the AWS provider version constraint?**
@@ -33,6 +44,18 @@ It records the exact provider versions and SHA-256 checksums selected by `terraf
 **Q5. What is Terraform state and why is it important?**
 
 Terraform state (`terraform.tfstate`) maps your configuration resources to real-world infrastructure. Terraform uses it to determine what exists, what needs to change, and what should be destroyed. Without state, Terraform cannot track drift or perform incremental updates — it would attempt to recreate all resources on every apply.
+
+```mermaid
+flowchart TD
+    CFG[HCL Configuration] --> PLAN[terraform plan]
+    STATE[terraform.tfstate\ncurrent state] --> PLAN
+    AWS[AWS API\nlive state] --> PLAN
+    PLAN --> DIFF{Drift detected?}
+    DIFF -->|Yes| APPLY[terraform apply]
+    DIFF -->|No| NOOP[No changes needed]
+    APPLY --> STATE
+    APPLY --> AWS
+```
 
 ---
 
@@ -66,6 +89,14 @@ AWS provider v4 deprecated inline sub-resource blocks (e.g., `versioning {}`, `s
 
 Through implicit dependencies. `aws_s3_bucket_versioning`, `aws_s3_bucket_server_side_encryption_configuration`, and `aws_s3_bucket_public_access_block` all reference `aws_s3_bucket.platform_baseline_bucket.id`. Terraform builds a dependency graph and ensures the base bucket is created first before applying the sub-configurations.
 
+```mermaid
+graph TD
+    BUCKET[aws_s3_bucket\nplatform_baseline_bucket]
+    BUCKET -->|.id reference| VER[aws_s3_bucket_versioning]
+    BUCKET -->|.id reference| ENC[aws_s3_bucket_server_side_encryption_configuration]
+    BUCKET -->|.id reference| PAB[aws_s3_bucket_public_access_block]
+```
+
 ---
 
 **Q11. What is the `force_destroy` attribute on `aws_s3_bucket` and when would you use it?**
@@ -85,6 +116,19 @@ S3 bucket names must be globally unique across all AWS accounts and regions, 3�
 **Q13. What does enabling S3 versioning mean for object storage behaviour?**
 
 Once enabled, every `PUT` operation creates a new version of the object rather than overwriting it. A `DELETE` operation inserts a delete marker instead of permanently removing the object. All previous versions remain accessible by specifying the `VersionId`. Versioning cannot be fully disabled once enabled — it can only be suspended, which stops creating new versions but retains existing ones.
+
+```mermaid
+flowchart TD
+    PUT[PUT object.txt] --> VER{Versioning enabled?}
+    VER -->|No| OVR[Overwrite — previous data lost]
+    VER -->|Yes| NEWV[New version created\nVersionId: xyz123]
+    NEWV --> PREV[Previous version retained\nVersionId: abc456]
+
+    DEL[DELETE object.txt] --> VER2{Versioning enabled?}
+    VER2 -->|No| GONE[Object permanently deleted]
+    VER2 -->|Yes| DM[Delete marker inserted\nVersionId: del789]
+    DM --> STILL[All versions still accessible\nvia VersionId]
+```
 
 ---
 
@@ -134,6 +178,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "retention" {
 
 Common rules include transitioning non-current versions to `STANDARD_IA` or `GLACIER` to reduce cost, expiring non-current versions after a defined retention period, and aborting incomplete multipart uploads to prevent orphaned partial uploads from accumulating.
 
+```mermaid
+flowchart LR
+    NEW[Object uploaded\ncurrent version] -->|Newer PUT replaces it| NC[Non-current version]
+    NC -->|30 days| IA[Transition to STANDARD_IA\nlower storage cost]
+    IA -->|90 days| EXP[Expire and delete]
+
+    MPU[Incomplete multipart\nupload] -->|7 days| ABORT[Abort and delete\nno orphaned data]
+```
+
 ---
 
 ## S3 Security and Encryption
@@ -145,6 +198,23 @@ Common rules include transitioning non-current versions to `STANDARD_IA` or `GLA
 | SSE-S3 (AES-256) | AWS manages keys entirely | General baseline; no compliance key requirements |
 | SSE-KMS | AWS KMS manages CMKs; customer controls key policy | Audit trails, cross-account access, HIPAA/PCI |
 | SSE-C | Customer provides key per request | Customer retains full key ownership; no AWS key storage |
+
+```mermaid
+flowchart TD
+    PUT[PUT request] --> HDR{Encryption header\nin request?}
+    HDR -->|No header| DEF[Bucket default applies\nSSE-S3 or SSE-KMS]
+    HDR -->|SSE-S3| S3K[AES-256\nAWS-managed key]
+    HDR -->|SSE-KMS| KMS[CMK in AWS KMS\nCloudTrail audit log]
+    HDR -->|SSE-C| CUST[Customer-provided key\nnot stored by AWS]
+    DEF --> STORED[Object stored encrypted on disk]
+    S3K --> STORED
+    KMS --> STORED
+    CUST --> STORED
+
+    GET[GET request] --> DEC{Encryption type?}
+    DEC -->|SSE-S3 or SSE-KMS| AUTO[Transparent decrypt\nno client action needed]
+    DEC -->|SSE-C| KREQ[Client must supply key\nwith every GET request]
+```
 
 ---
 
@@ -195,6 +265,21 @@ In Terraform this is managed with `aws_s3_bucket_policy` using a `data "aws_iam_
 | `ignore_public_acls` | Makes S3 ignore any existing public ACLs; does not remove them |
 | `block_public_policy` | Prevents bucket policies that grant public access |
 | `restrict_public_buckets` | Blocks public and cross-account access to the bucket when a public policy is in effect |
+
+```mermaid
+flowchart TD
+    REQ[Incoming S3 request] --> WILD{Principal is wildcard\nPrincipal: * ?}
+    WILD -->|No — specific IAM principal| IAM[Evaluate bucket policy\nand IAM policy normally\ncross-account access permitted]
+    WILD -->|Yes — anonymous public request| PAB[Public Access Block evaluated]
+    PAB --> BPA{block_public_acls?}
+    BPA -->|true| RACK[Reject PUT\ncontaining public ACL]
+    PAB --> IPA{ignore_public_acls?}
+    IPA -->|true| IACL[Existing public ACLs\nhave no effect]
+    PAB --> BPP{block_public_policy?}
+    BPP -->|true| RPOL[Reject bucket policy\ngranting public access]
+    PAB --> RPB{restrict_public_buckets?}
+    RPB -->|true| DENY[Block all public\nand wildcard cross-account access]
+```
 
 ---
 
@@ -356,6 +441,19 @@ A typical pipeline for infrastructure changes:
 6. **Post-apply**: `terraform output -json` captures bucket names and ARNs for downstream pipeline stages (e.g., passing the bucket name to application deployment steps).
 
 State is stored in S3 with DynamoDB locking. The pipeline IAM role is scoped to the specific resources it provisions.
+
+```mermaid
+flowchart TD
+    PR[Pull Request] --> FMT[terraform fmt -check]
+    FMT --> VAL[terraform validate]
+    VAL --> SEC[tfsec / checkov\nsecurity scan]
+    SEC -->|Issues found| BLOCK[Pipeline blocked\nsecurity violations]
+    SEC -->|Clean| PLAN[terraform plan -out=tfplan\nartefact saved]
+    PLAN --> GATE[Approval gate\nhuman review or Sentinel/OPA]
+    GATE -->|Approved| APPLY[terraform apply tfplan]
+    GATE -->|Rejected| FAIL[Pipeline blocked]
+    APPLY --> OUT[terraform output -json\nbucket name and ARN published\nto downstream stages]
+```
 
 ---
 
