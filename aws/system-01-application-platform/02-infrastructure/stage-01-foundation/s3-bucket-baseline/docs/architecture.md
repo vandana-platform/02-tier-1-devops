@@ -4,12 +4,28 @@
 
 This module provisions a secure, versioned S3 bucket as part of the foundational infrastructure layer for the Tier-1 AWS Application Platform. It sits at **stage-01-foundation**, establishing a compliant storage baseline that subsequent platform stages can build upon.
 
+---
+
+## Repository Structure
+
 ```
 Tier-1 DevOps
 └── system-01-application-platform
     └── 02-infrastructure
         └── stage-01-foundation
             └── s3-bucket-baseline
+```
+
+---
+
+## Infrastructure Components
+
+```
+AWS Account (us-east-1)
+└── S3 Bucket: tier1-platform-baseline-demo-bucket
+    ├── Versioning: Enabled
+    ├── Encryption: AES-256 (SSE-S3)
+    └── Public Access Block: All four vectors blocked
 ```
 
 ---
@@ -45,17 +61,7 @@ aws_s3_bucket  "platform_baseline_bucket"
 
 ### `aws_s3_bucket`
 
-The root resource. Declares the bucket name (`tier1-platform-baseline-demo-bucket`) and applies a standard tag set:
-
-```hcl
-tags = {
-  Name        = "tier1-platform-baseline"
-  Environment = "foundation"
-  Project     = "tier1-devops-platform"
-}
-```
-
-Tags are used for cost allocation, resource grouping, and future policy targeting.
+The root resource. Declares the bucket name (`tier1-platform-baseline-demo-bucket`).
 
 ### `aws_s3_bucket_versioning`
 
@@ -87,7 +93,7 @@ Terraform CLI
      ▼
 AWS Provider (hashicorp/aws ~> 5.0)
      │
-     ├── Creates  → aws_s3_bucket
+     ├── Creates    → aws_s3_bucket
      ├── Configures → aws_s3_bucket_versioning
      ├── Configures → aws_s3_bucket_server_side_encryption_configuration
      └── Configures → aws_s3_bucket_public_access_block
@@ -99,6 +105,20 @@ AWS Provider (hashicorp/aws ~> 5.0)
                               ▼
                      Output: s3_bucket_name
 ```
+
+---
+
+## Tagging Strategy
+
+All resources share consistent tags applied to `aws_s3_bucket`:
+
+| Tag | Value |
+|-----|-------|
+| `Name` | `tier1-platform-baseline` |
+| `Environment` | `foundation` |
+| `Project` | `tier1-devops-platform` |
+
+Tags are used for cost allocation, resource grouping, and future policy targeting.
 
 ---
 
