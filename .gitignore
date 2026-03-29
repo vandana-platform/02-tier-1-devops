@@ -13,3 +13,5 @@ override.tf.json
 # Terraform variable files
 *.tfvars
 *.tfvars.json
+CONTEXT.md
+JOURNAL.md
