@@ -1,8 +1,8 @@
 # S3 Static Site
 
-Hosts a static website using **Amazon S3 static website hosting** with a bucket policy that allows public read access to objects. Terraform provisions the bucket, website configuration, public access settings, and IAM policy in a single module.
+Provisions an Amazon S3 bucket configured for **static website hosting** as part of the **Data Platform infrastructure foundation**.
 
-The purpose of this project is to demonstrate how **object storage** can serve static content over HTTP as part of the **Data Platform infrastructure foundation**, using **Infrastructure as Code (IaC)**.
+The purpose of this project is to demonstrate how object storage can serve static content over HTTP using **Infrastructure as Code (IaC)**, including bucket policy authoring, public access configuration, and resource dependency ordering with `depends_on`.
 
 ---
 
@@ -16,7 +16,7 @@ The purpose of this project is to demonstrate how **object storage** can serve s
 | Capability Layer | 02-infrastructure |
 | Infrastructure Stage | stage-01-foundation |
 
-This project represents a **foundation-level static content capability** for the Data Platform.
+This project represents a **foundation-level static content delivery capability** for the Data Platform.
 
 ---
 
@@ -24,19 +24,19 @@ This project represents a **foundation-level static content capability** for the
 
 | Resource | Description |
 |---|---|
-| `aws_s3_bucket` | S3 bucket named via `bucket_name`; tagged with environment and ownership |
-| `aws_s3_bucket_website_configuration` | Static website: `index.html` as index, `error.html` as error document |
-| `aws_s3_bucket_public_access_block` | All public access block settings set to `false` so the bucket can be public |
-| `aws_s3_bucket_policy` | Allows `s3:GetObject` for all principals on `arn:.../*` (public read of objects) |
+| `aws_s3_bucket` | S3 bucket named via `var.bucket_name` (`us-east-1`) |
+| `aws_s3_bucket_website_configuration` | Enables static website hosting with `index.html` as the index document and `error.html` as the error document |
+| `aws_s3_bucket_public_access_block` | Disables all four public access block settings to allow public object reads |
+| `aws_s3_bucket_policy` | Grants anonymous `s3:GetObject` to all objects in the bucket |
 
 ---
 
 ## Prerequisites
 
-- [Terraform](https://developer.hashicorp.com/terraform/install) `>= 1.0` (per `versions.tf`)
+- [Terraform](https://developer.hashicorp.com/terraform/install) `>= 1.0`
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) configured with valid credentials
 - AWS provider `~> 5.0`
-- A **globally unique** S3 bucket name (S3 bucket names are global across all AWS accounts)
+- A **globally unique** S3 bucket name (bucket names are shared across all AWS accounts and regions)
 
 ---
 
@@ -47,8 +47,8 @@ s3-static-site/
 ├── versions.tf   # Terraform and provider version constraints
 ├── provider.tf   # AWS provider configuration
 ├── variables.tf  # Input variable definitions
-├── main.tf       # S3 bucket, website, public access block, bucket policy
-├── outputs.tf    # Output values (bucket name, website endpoint)
+├── main.tf       # S3 bucket, website configuration, public access block, and bucket policy
+├── outputs.tf    # Output values (bucket_name, website_endpoint)
 └── README.md
 ```
 
@@ -60,7 +60,7 @@ s3-static-site/
 |---|---|---|---|
 | `aws_region` | `string` | `us-east-1` | AWS region for resource deployment |
 | `bucket_name` | `string` | *(required)* | Globally unique S3 bucket name for the static site |
-| `environment` | `string` | `dev` | Environment name (stored in tags) |
+| `environment` | `string` | `dev` | Environment name applied as a resource tag |
 
 ---
 
@@ -86,7 +86,7 @@ terraform apply -var="bucket_name=your-unique-bucket-name"
 terraform destroy -var="bucket_name=your-unique-bucket-name"
 ```
 
-> Destroying infrastructure removes the bucket and its configuration. If the bucket still contains objects, `terraform destroy` may fail until the bucket is empty or you add force-destroy behaviour. After destroy, you avoid ongoing S3 storage and request charges for that bucket.
+> Destroying infrastructure removes the bucket and all associated configuration. **Empty the bucket before running destroy** — S3 will not delete a non-empty bucket and `terraform destroy` will fail with `BucketNotEmpty`. Always destroy unused stacks to prevent ongoing S3 storage and request charges.
 
 ---
 
@@ -96,13 +96,13 @@ After a successful `terraform apply`, the following values are returned:
 
 | Output | Description |
 |---|---|
-| `bucket_name` | The S3 bucket name (same as `var.bucket_name` after create) |
-| `website_endpoint` | The S3 website endpoint hostname (e.g. `bucket-name.s3-website-us-east-1.amazonaws.com`) |
+| `bucket_name` | The name of the provisioned S3 bucket |
+| `website_endpoint` | The S3 static website endpoint URL |
 
 Example:
 ```
-bucket_name       = "my-demo-static-site-12345"
-website_endpoint  = "my-demo-static-site-12345.s3-website-us-east-1.amazonaws.com"
+bucket_name      = "my-demo-static-site-12345"
+website_endpoint = "my-demo-static-site-12345.s3-website-us-east-1.amazonaws.com"
 ```
 
 ---
@@ -111,22 +111,23 @@ website_endpoint  = "my-demo-static-site-12345.s3-website-us-east-1.amazonaws.co
 
 **`BucketAlreadyExists` — bucket name taken globally**
 
-The chosen `bucket_name` is already owned by another AWS account or region configuration. Pick a different globally unique name and pass it with `-var="bucket_name=..."`.
+S3 bucket names are globally unique across all AWS accounts and regions. Choose a name that includes a project prefix, account ID, or random suffix to avoid collisions with other accounts.
 
-**`AccessDenied` when applying bucket policy**
+**`AccessDenied` when attaching the bucket policy**
 
-The IAM principal running Terraform needs `s3:PutBucketPolicy`, `s3:GetBucketPolicy`, and related bucket management permissions. Confirm with `aws sts get-caller-identity` and attach an appropriate policy.
+The public access block must be fully applied before the bucket policy is evaluated. The module enforces this with `depends_on`, but if a previous apply was interrupted mid-run, re-run `terraform apply` to complete the sequence. Also confirm the IAM identity has `s3:PutBucketPolicy` and `s3:PutBucketPublicAccessBlock` permissions.
 
-**Website URL returns 404 after upload**
+**`BucketNotEmpty` during `terraform destroy`**
 
-The website endpoint serves objects at the root of the bucket; ensure `index.html` exists at the bucket root and that you are using the **website endpoint** (not the REST API endpoint `s3.amazonaws.com`).
+Terraform cannot delete an S3 bucket that contains objects. Run `aws s3 rm s3://BUCKET_NAME/ --recursive` before retrying `terraform destroy`.
 
 ---
 
 ## Learning Outcomes
 
-- Infrastructure provisioning with Terraform for S3 static website hosting
-- Relationship between `aws_s3_bucket`, website configuration, public access block, and bucket policy
-- Why bucket policies and public access block must align for a public static site
+- S3 static website hosting configuration with Terraform
+- Relationship between public access block settings, bucket policy, and the website endpoint
+- Bucket policy authoring using `jsonencode` in HCL
+- Terraform resource dependency ordering with `depends_on`
 - Terraform lifecycle management (`init` → `plan` → `apply` → `destroy`)
-- Verifying a static site via AWS CLI, Console, and `terraform output`
+- Verifying infrastructure via AWS CLI, AWS Console, and Terraform output
