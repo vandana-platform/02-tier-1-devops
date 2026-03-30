@@ -1,12 +1,12 @@
 # Troubleshooting — S3 Static Site
 
-Common issues when provisioning or using this Terraform module and how to resolve them.
+Common issues encountered when working with this Terraform module and their solutions.
 
 ---
 
 ## 1. Terraform Initialization Errors
 
-### Failed to install provider
+### `Failed to install provider`
 
 **Symptom:**
 
@@ -15,23 +15,20 @@ Error: Failed to install provider
 Could not retrieve the list of available versions for provider hashicorp/aws.
 ```
 
-**Cause:** No network path to the Terraform Registry, or a proxy is blocking downloads.
+**Cause:** No internet access, or a corporate proxy is blocking the Terraform Registry.
 
 **Fix:**
-1. Verify connectivity:
-   ```bash
-   curl -I https://registry.terraform.io
-   ```
-2. Behind a proxy:
-   ```bash
-   export HTTPS_PROXY=http://proxy.example.com:8080
-   export HTTP_PROXY=http://proxy.example.com:8080
-   terraform init
-   ```
+- Verify connectivity: `curl -I https://registry.terraform.io`
+- If behind a proxy, set the proxy environment variables:
+  ```bash
+  export HTTPS_PROXY=http://proxy.example.com:8080
+  export HTTP_PROXY=http://proxy.example.com:8080
+  ```
+- Alternatively, use a locally mirrored provider with `terraform init -plugin-dir=/path/to/providers`.
 
 ---
 
-### Inconsistent lock file
+### `Lock file conflict after provider upgrade`
 
 **Symptom:**
 
@@ -40,10 +37,9 @@ Error: Inconsistent dependency lock file
 The lock file does not contain a suitable checksum for provider "hashicorp/aws".
 ```
 
-**Cause:** `.terraform.lock.hcl` was generated on another OS/architecture.
+**Cause:** The `.terraform.lock.hcl` file was committed with checksums for a different OS or architecture.
 
 **Fix:**
-
 ```bash
 terraform providers lock \
   -platform=linux_amd64 \
@@ -56,268 +52,425 @@ terraform providers lock \
 
 ## 2. Variable and Planning Errors
 
-### Required variable not set
+### `No value for required variable`
 
 **Symptom:**
 
 ```
 Error: No value for required variable
+
+  on variables.tf line 7:
+   7: variable "bucket_name" {
+
 The root module input variable "bucket_name" is not set, and has no default value.
 ```
 
-**Cause:** `bucket_name` must be supplied on the CLI or in a `tfvars` file.
+**Cause:** `bucket_name` has no default and must be supplied on every `plan` and `apply` invocation.
 
-**Fix:**
-
+**Fix:** Pass the variable on the CLI or via a `tfvars` file:
 ```bash
-terraform plan -var="bucket_name=my-globally-unique-name"
+terraform plan -var="bucket_name=your-unique-bucket-name"
 ```
 
 ---
 
 ## 3. AWS Permission Errors
 
-### AccessDenied on bucket or policy operations
+### `AuthFailure` — Invalid AWS Credentials
 
 **Symptom:**
 
 ```
-Error: error creating S3 Bucket ... AccessDenied
+Error: configuring Terraform AWS Provider: no valid credential sources found
+```
+
+**Cause:** Terraform cannot locate valid AWS credentials. No credentials file, environment variables, or IAM role are configured.
+
+**Fix:**
+```bash
+aws configure
+aws sts get-caller-identity  # verify credentials are active
+```
+
+Ensure one of the following credential sources is available:
+- `~/.aws/credentials` with a valid profile
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables
+- An attached IAM instance profile (if running on EC2)
+
+---
+
+### `ExpiredToken` or `InvalidClientTokenId`
+
+**Symptom:**
+
+```
+Error: operation error S3: ..., ExpiredTokenException
+```
+
+**Cause:** Temporary credentials (STS / SSO session) have expired.
+
+**Fix:**
+```bash
+# For AWS SSO
+aws sso login --profile <profile-name>
+
+# For MFA-based sessions, re-generate the token
+aws sts get-session-token --serial-number arn:aws:iam::ACCOUNT:mfa/USER --token-code 123456
+```
+
+---
+
+### `AccessDenied` on S3 operations
+
+**Symptom:**
+
+```
+Error: creating S3 Bucket: AccessDenied
 ```
 
 or
 
 ```
-Error: putting S3 Bucket Policy ... AccessDenied
+Error: putting S3 Bucket Policy: AccessDenied
 ```
 
-**Cause:** The IAM principal lacks S3 permissions for the requested operation.
+**Cause:** The IAM identity executing Terraform lacks the required S3 permissions.
 
 **Fix:**
-1. Confirm identity:
+1. Confirm which identity is in use:
    ```bash
-   aws sts get-caller-identity --output json
+   aws sts get-caller-identity
    ```
-2. Ensure policies allow actions such as `s3:CreateBucket`, `s3:PutBucketWebsite`, `s3:PutBucketPolicy`, and `s3:PutBucketPublicAccessBlock` for the bucket ARN or `*` during sandbox development.
+2. Attach or inline a policy that includes at minimum:
+   ```json
+   {
+     "Effect": "Allow",
+     "Action": [
+       "s3:CreateBucket",
+       "s3:DeleteBucket",
+       "s3:PutBucketWebsite",
+       "s3:GetBucketWebsite",
+       "s3:PutBucketPolicy",
+       "s3:GetBucketPolicy",
+       "s3:DeleteBucketPolicy",
+       "s3:PutBucketPublicAccessBlock",
+       "s3:GetBucketPublicAccessBlock"
+     ],
+     "Resource": "*"
+   }
+   ```
 
 ---
 
-### Expired or invalid credentials
+## 4. S3 Bucket Creation Failures
+
+### `BucketAlreadyExists` — Name Taken Globally
 
 **Symptom:**
 
 ```
-Error: error configuring Terraform AWS Provider: ... ExpiredToken
+Error: creating S3 Bucket: BucketAlreadyExists:
+  The requested bucket name is not available. The bucket namespace is shared
+  by all users of the system.
 ```
 
-**Cause:** STS session or SSO login expired.
+**Cause:** S3 bucket names are globally unique across all AWS accounts and regions. Another account already owns this name.
+
+**Fix:** Choose a different name that includes a project prefix, account ID, or random suffix:
+```bash
+terraform apply -var="bucket_name=mycompany-static-demo-$(date +%s)"
+```
+
+---
+
+### `BucketAlreadyOwnedByYou`
+
+**Symptom:**
+
+```
+Error: creating S3 Bucket: BucketAlreadyOwnedByYou
+```
+
+**Cause:** The bucket already exists in your account but is not tracked in Terraform state (e.g., state was lost, or a previous apply created the bucket before failing).
+
+**Fix:** Import the existing bucket into state before re-applying:
+```bash
+terraform import -var="bucket_name=your-bucket-name" aws_s3_bucket.static_site your-bucket-name
+```
+
+Then run `terraform plan` to check for drift before applying further changes.
+
+---
+
+### `InvalidBucketName` — Name Format Violation
+
+**Symptom:**
+
+```
+Error: creating S3 Bucket: InvalidBucketName:
+  The specified bucket is not valid.
+```
+
+**Cause:** S3 bucket names must be 3–63 characters, lowercase letters, numbers, and hyphens only. Names cannot begin or end with a hyphen, contain consecutive hyphens, or resemble an IP address.
+
+**Fix:** Use only lowercase letters, numbers, and single hyphens:
+```bash
+terraform apply -var="bucket_name=my-static-site-dev"
+```
+
+---
+
+## 5. Public Access and Bucket Policy Errors
+
+### `Public policies are blocked by the BlockPublicPolicy setting`
+
+**Symptom:**
+
+```
+Error: putting S3 Bucket Policy (your-bucket): OperationAborted:
+  A conflicting conditional operation is currently in progress against this resource.
+```
+
+or
+
+```
+Error: putting S3 Bucket Policy: ... public policies are blocked by the BlockPublicPolicy setting.
+```
+
+**Cause:** The public access block has not yet taken effect when the bucket policy is applied. This can happen if a partial apply was interrupted or if the `depends_on` was removed from the bucket policy resource.
 
 **Fix:**
+1. Confirm the public access block resource has all four settings as `false` in `main.tf`.
+2. Confirm `aws_s3_bucket_policy.static_site` still includes `depends_on = [aws_s3_bucket_public_access_block.static_site]`.
+3. Re-run apply:
+   ```bash
+   terraform apply -var="bucket_name=your-bucket-name"
+   ```
 
+If applying individually to debug:
 ```bash
-aws sso login --profile your-profile
-# or refresh keys / MFA as appropriate
-aws sts get-caller-identity
-```
-
----
-
-## 4. S3 Bucket Naming and Availability
-
-### BucketAlreadyOwnedByYou or BucketAlreadyExists
-
-**Symptom:**
-
-```
-Error: creating S3 Bucket: BucketAlreadyExists
-```
-
-**Cause:** The bucket name is globally reserved or owned by another account.
-
-**Fix:** Choose a new unique name and re-apply:
-
-```bash
-terraform apply -var="bucket_name=different-prefix-demo-2026-xyz"
-```
-
----
-
-### Invalid bucket name
-
-**Symptom:**
-
-```
-Error: ... invalid bucket name
-```
-
-**Cause:** Bucket names must be 3–63 characters, lowercase, DNS-compliant (no underscores in many cases), and follow [S3 naming rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html).
-
-**Fix:** Use lowercase letters, numbers, and hyphens only; shorten the label if needed.
-
----
-
-## 5. Public Access and Policy Application
-
-### Policy apply blocked by public access settings
-
-**Symptom:**
-
-```
-Error: putting S3 Bucket Policy: ... public policies are blocked by the BlockPublicPolicy setting
-```
-
-**Cause:** Public access block still prevented public bucket policies, or the public access block resource had not been applied before the policy.
-
-**Fix:** This module sets all public block flags to `false` and uses `depends_on`. If you edited the configuration, ensure:
-
-1. `aws_s3_bucket_public_access_block` has all four attributes `false`.
-2. `aws_s3_bucket_policy` includes `depends_on = [aws_s3_bucket_public_access_block.static_site]`.
-
-Then run:
-
-```bash
+terraform apply -target=aws_s3_bucket_public_access_block.static_site -var="bucket_name=your-bucket-name"
 terraform apply -var="bucket_name=your-bucket-name"
 ```
 
 ---
 
-### Account-level block public access
+### Account-Level Block Public Access Override
 
-**Symptom:** Apply succeeds but the website is not reachable, or Console shows bucket is still “public access blocked” at account level.
+**Symptom:** Apply succeeds without error, but the website URL returns a `403 Forbidden` or the Console shows the bucket is still blocked.
 
-**Cause:** Some organisations enforce **S3 Block Public Access** at the account level.
+**Cause:** Your AWS **account** has S3 Block Public Access enabled at the account level, which overrides bucket-level settings.
 
-**Fix:** An administrator must allow public buckets for this use case, or you must switch architecture to **private bucket + CloudFront OAC** (recommended for production) instead of a public website endpoint.
+**Fix:**
+Check the account-level setting:
+```bash
+aws s3control get-public-access-block \
+  --account-id $(aws sts get-caller-identity --query Account --output text) \
+  --query PublicAccessBlockConfiguration \
+  --output table
+```
+
+An administrator must disable the account-level block to allow public buckets, or the architecture should be changed to **private bucket + CloudFront OAC**, which does not require any public access.
 
 ---
 
 ## 6. Website Endpoint and HTTP Behaviour
 
-### 403 Forbidden when opening the website URL
+### `403 Forbidden` When Opening the Website URL
 
-**Symptom:** Browser or `curl` shows `403 Forbidden` for `http://bucket.s3-website-.../`.
+**Symptom:**
 
-**Cause:** Common causes include missing `index.html`, wrong endpoint type (REST instead of website), or objects not publicly readable despite policy.
+```
+curl: (22) The requested URL returned error: 403 Forbidden
+```
+
+**Cause:** One or more of the following:
+- `index.html` does not exist at the bucket root.
+- The bucket policy is not yet applied or is missing.
+- You are using the **REST endpoint** (`s3.amazonaws.com`) instead of the **website endpoint** (`s3-website-<region>.amazonaws.com`).
 
 **Fix:**
 1. Upload `index.html` to the bucket root:
    ```bash
    aws s3 cp index.html s3://YOUR_BUCKET/index.html
    ```
-2. Use the **website** endpoint from `terraform output website_endpoint`, not `https://YOUR_BUCKET.s3.amazonaws.com/...` unless you intentionally use the REST API with signing.
-3. Verify policy allows `GetObject` on `arn:aws:s3:::YOUR_BUCKET/*`:
+2. Verify the website endpoint from Terraform output — ensure you use `http://`, not `https://`:
    ```bash
-   aws s3api get-bucket-policy --bucket YOUR_BUCKET --query Policy --output text | jq .
+   ENDPOINT=$(terraform output -raw website_endpoint)
+   curl -sS "http://${ENDPOINT}/"
+   ```
+3. Verify the bucket policy allows `GetObject`:
+   ```bash
+   aws s3api get-bucket-policy \
+     --bucket YOUR_BUCKET \
+     --query Policy \
+     --output text
    ```
 
 ---
 
-### 404 Not Found on root URL
+### `404 Not Found` on Root URL
 
-**Symptom:** Website endpoint loads but root path returns 404.
+**Symptom:** The website endpoint responds but the root path returns a `404 Not Found` page served by S3.
 
-**Cause:** No object named `index.html` at the root of the bucket.
+**Cause:** No object named `index.html` exists at the root of the bucket.
 
 **Fix:**
-
 ```bash
+# Check what objects are in the bucket
 aws s3 ls s3://YOUR_BUCKET/
+
+# Upload the missing index document
 aws s3 cp index.html s3://YOUR_BUCKET/index.html
 ```
 
 ---
 
-### Using HTTPS against the website endpoint
+### TLS Error When Using `https://` on the Website Endpoint
 
-**Symptom:** TLS errors or failures when using `https://` on the `s3-website-*` hostname.
+**Symptom:**
 
-**Cause:** The S3 **website endpoint** serves HTTP. It is not an HTTPS listener.
+```
+curl: (35) OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection
+```
 
-**Fix:** Use `http://` for quick tests, or front the bucket with **CloudFront** and ACM for HTTPS.
+or a browser certificate error.
+
+**Cause:** The S3 **website endpoint** (`s3-website-*.amazonaws.com`) is HTTP-only. HTTPS is not supported directly on the website endpoint hostname.
+
+**Fix:** Use `http://` for local testing against the website endpoint. For HTTPS in production, place **CloudFront** in front of the bucket with an ACM certificate.
 
 ---
 
 ## 7. Destroy and Bucket Not Empty
 
-### Error deleting bucket: BucketNotEmpty
+### `BucketNotEmpty` During `terraform destroy`
 
 **Symptom:**
 
 ```
-Error: deleting S3 Bucket: BucketNotEmpty
+Error: deleting S3 Bucket (your-bucket): BucketNotEmpty:
+  The bucket you tried to delete is not empty
 ```
 
-**Cause:** Terraform tries to delete the bucket while objects remain.
+**Cause:** Terraform attempts to delete the bucket while objects remain inside it. S3 does not allow deletion of a non-empty bucket.
 
 **Fix:**
-1. List and remove objects:
+1. Remove all objects:
    ```bash
    aws s3 rm s3://YOUR_BUCKET/ --recursive
    ```
-2. Delete versioned objects if versioning was enabled outside this module (not created here):
+2. If versioning was enabled on the bucket (not in this module but possible via console), also remove delete markers:
    ```bash
-   aws s3api list-object-versions --bucket YOUR_BUCKET --output json
-   # remove versions as required per organisation procedures
+   aws s3api list-object-versions \
+     --bucket YOUR_BUCKET \
+     --query "Versions[*].{Key:Key,VersionId:VersionId}" \
+     --output table
    ```
-3. Re-run:
+3. Re-run destroy:
    ```bash
    terraform destroy -var="bucket_name=YOUR_BUCKET"
    ```
 
 ---
 
-## 8. State Drift and Imports
+## 8. Terraform State Problems
 
-### Bucket exists but not in state
+### State File Missing or Corrupted
 
-**Symptom:** `terraform apply` fails because the bucket name already exists; state was lost.
+**Symptom:**
 
-**Cause:** State file deleted or workspace changed.
-
-**Fix:** Import existing resources in dependency order (exact addresses must match your `main.tf`):
-
-```bash
-terraform import -var="bucket_name=YOUR_BUCKET" aws_s3_bucket.static_site YOUR_BUCKET
-terraform import -var="bucket_name=YOUR_BUCKET" aws_s3_bucket_website_configuration.static_site YOUR_BUCKET
-terraform import -var="bucket_name=YOUR_BUCKET" aws_s3_bucket_public_access_block.static_site YOUR_BUCKET
-terraform import -var="bucket_name=YOUR_BUCKET" aws_s3_bucket_policy.static_site YOUR_BUCKET
+```
+Error: No state file was found!
 ```
 
-Then run `terraform plan -var="bucket_name=…"` and reconcile any drift.
+or Terraform plans to create resources that already exist in AWS.
+
+**Cause:** `terraform.tfstate` was deleted, moved, or corrupted.
+
+**Fix:** Import each resource in dependency order if the infrastructure still exists in AWS:
+```bash
+BUCKET="your-bucket-name"
+
+terraform import -var="bucket_name=$BUCKET" aws_s3_bucket.static_site "$BUCKET"
+terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_website_configuration.static_site "$BUCKET"
+terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_public_access_block.static_site "$BUCKET"
+terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_policy.static_site "$BUCKET"
+```
+
+Then run `terraform plan` to confirm state matches the live infrastructure before applying further changes.
+
+---
+
+### Resource Already Exists in AWS But Not in State
+
+**Symptom:** `terraform plan` shows resources to be created, but the apply fails with `BucketAlreadyOwnedByYou` or a duplicate resource error.
+
+**Cause:** Resources were created outside of Terraform (manually or from a previous run that lost its state file).
+
+**Fix:** Import the orphaned resources as shown above, then reconcile drift with `terraform plan`.
 
 ---
 
 ## 9. Provider and Core Version Errors
 
-### Unsupported Terraform Core version
+### `Unsupported Terraform Core version`
 
 **Symptom:**
 
 ```
 Error: Unsupported Terraform Core version
+This configuration does not support Terraform version X.Y.Z.
 ```
 
-**Cause:** Installed Terraform is older than `versions.tf` requires.
+**Cause:** The installed Terraform binary is older than `>= 1.0` as required by `versions.tf`.
 
-**Fix:** Upgrade to Terraform `>= 1.0` and verify:
-
+**Fix:** Upgrade Terraform:
 ```bash
+# Using tfenv (recommended)
+tfenv install 1.9.0
+tfenv use 1.9.0
+
+# Verify
 terraform version
 ```
 
 ---
 
-## 10. Outputs Missing After Apply
+### `Unsupported argument` After Provider Upgrade
 
-**Symptom:** Terminal shows apply success but outputs do not print.
+**Symptom:**
 
-**Cause:** Outputs may not reprint if unchanged in some workflows.
+```
+Error: Unsupported argument
+An argument named "..." is not expected here.
+```
 
-**Fix:**
+**Cause:** An argument was renamed or removed in a newer version of the AWS provider.
 
+**Fix:** Check the [AWS provider changelog](https://github.com/hashicorp/terraform-provider-aws/blob/main/CHANGELOG.md) for the breaking change. Confirm your provider version:
+```bash
+terraform version
+terraform providers
+```
+
+---
+
+## 10. Outputs Not Visible After Apply
+
+**Symptom:** After a successful `terraform apply`, no output values are printed.
+
+**Cause:** Outputs are only reprinted when they change. If the infrastructure already existed and no changes were made, outputs may not be re-displayed.
+
+**Fix:** Query outputs explicitly:
 ```bash
 terraform output
 terraform output website_endpoint
+```
+
+Or refresh state without making changes:
+```bash
+terraform apply -refresh-only -var="bucket_name=your-bucket-name"
 ```
 
 ---
