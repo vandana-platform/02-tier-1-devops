@@ -6,7 +6,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name prefix"
   type        = string
-  default     = "vandana-alb"
+  default     = "tier2-alb-baseline"
 }
 variable "vpc_id" {
   description = "VPC ID where ALB will be deployed"
